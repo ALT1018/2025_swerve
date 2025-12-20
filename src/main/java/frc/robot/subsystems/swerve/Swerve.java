@@ -86,7 +86,7 @@ public class Swerve extends SubsystemBase{
         // Odometry & PoseEstimator
         m_odometry = new SwerveDriveOdometry(
             SwerveConstants.kSwerveDriveKinematics,
-            Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble()),
+            getImuARotation2d(),//Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble())
             getModulePositions()
         );
         
@@ -95,8 +95,8 @@ public class Swerve extends SubsystemBase{
         getImuARotation2d(),
         getModulePositions(),
         Pose2d.kZero,//initialPose,
-        VecBuilder.fill(0.1, 0.1, Units.degreesToRadians(5)),
-        VecBuilder.fill(0.7, 0.7, 999999999)
+        VecBuilder.fill(0.1, 0.1, Units.degreesToRadians(99999999)),
+        VecBuilder.fill(0.7, 0.7, Units.degreesToRadians(99999999))
         );
 
         // SmartDashboard
@@ -155,8 +155,6 @@ public class Swerve extends SubsystemBase{
         if(DriverStation.getAlliance().isPresent())
             m_alliance = DriverStation.getAlliance().get();
 
-        m_RobotPose = m_poseEstimator.getEstimatedPosition();
-
         m_poseEstimator.update(
             getImuARotation2d(),
             getModulePositions());
@@ -167,7 +165,9 @@ public class Swerve extends SubsystemBase{
 
         this.updateVisionPose();
 
-        m_field.setRobotPose(m_poseEstimator.getEstimatedPosition());
+        m_RobotPose = m_poseEstimator.getEstimatedPosition();
+
+        m_field.setRobotPose(m_RobotPose);
 
         // #region SmartDashboard
         SmartDashboard.putNumber("LF", this.getModuleStates()[0].angle.getDegrees());
@@ -243,6 +243,10 @@ public class Swerve extends SubsystemBase{
             getImuARotation2d(),
             getModulePositions(),
             pose);
+        m_poseEstimator.resetPosition(
+            getImuARotation2d(),
+            getModulePositions(),
+            pose);
     }
 
     public Pose2d getPose() {
@@ -308,11 +312,15 @@ public class Swerve extends SubsystemBase{
         iscameraGotSomething = LimelightHelpers.getTV("");
 
         if(iscameraGotSomething && mt2 != null) {
-            m_poseEstimator.setVisionMeasurementStdDevs(VecBuilder.fill(0.7, 0.7, 999999999));
+            Pose2d visionPoseNoRot = new Pose2d(
+                mt2.pose.getTranslation(),
+                m_poseEstimator.getEstimatedPosition().getRotation()
+            );
+
             m_poseEstimator.addVisionMeasurement(
-                mt2.pose,
+                visionPoseNoRot,
                 mt2.timestampSeconds); 
-            m_poseEstimator.resetPosition(getImuARotation2d(), getModulePositions(), mt2.pose);
+            // m_poseEstimator.resetPosition(getImuARotation2d(), getModulePositions(), mt2.pose);
         }
         SmartDashboard.putBoolean("cameraGotSomething", iscameraGotSomething);
     }

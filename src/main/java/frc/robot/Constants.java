@@ -71,11 +71,11 @@ public final class Constants {
 		//動力齒輪比
 		public static final double kThrottleGearRatio = 6.12;
 
-		//動力速度轉換 通式：(1/齒輪比)*輪徑*PI   (這個也沒有搞懂要幹嘛)
-		public static final double ThrottleVelocityConversionFactor =
-			(Math.PI * kwheeldiameterMeter) / (60.0 * kThrottleGearRatio);
+		//動力速度轉換 通式：(1/齒輪比)*輪徑*PI
+		public static final double kThrottleVelocityConversionFactor =
+			(Math.PI * kwheeldiameterMeter) / (kThrottleGearRatio);
 
-		public static final double ThrottlePositionConversionFactor =
+		public static final double kThrottlePositionConversionFactor =
 			(Math.PI * kwheeldiameterMeter) / kThrottleGearRatio;
 
 		public static final double kDefaultSpeed = 1;
@@ -83,20 +83,30 @@ public final class Constants {
 		//電壓最大值
 		public static final double kVoltagecompensation = 12.0;
 
+		//電流最大值
+		public static final double kCurrentLimit = 40;
+
 		//最常超時時間
 		public static final double kLongtimeoutMs = 100.0;
 
 		public static final boolean kRotorMotorInverted = true;
 		public static final boolean kThrottleMotorInverted = false;
 
+		// 動力馬達PID
+		public static final double kDrive_P = 0.1;
+		public static final double kDrive_I = 0;
+		public static final double kDrive_D = 0;
+		public static final double kDrive_kV = 0.1;
+
+		// 動力馬達FeedForward
 		public static final double kThottleFF_kV = 2.35;
 		public static final double kThottleFF_kA = 0.055; //0.48;
-		
 	
+		// Path 動力馬達 PID
 		public static final double kPath_kP = 0.008;//0.558;//0.537;
 		public static final double kPath_kI = 0.6;//0.22;//0.12;//0.15;
 		public static final double kPath_kD = 0;//0.00722;//0.1;//0.005;
-
+		// Path 轉向馬達 PID
 		public static final double kPathZ_kP = 0.66;//1.297;//1.25;//1.29;
 		public static final double kPathZ_kI = 0;//0;//0.05;//0.1;
 		public static final double kPathZ_kD = 0;//0.001;//0.0025;

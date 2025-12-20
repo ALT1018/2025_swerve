@@ -72,8 +72,6 @@ public class Swerve extends SubsystemBase{
     private boolean fieldOriented = true;
     private boolean iscameraGotSomething = false;
 
-    public boolean isffControl = true;
-
     private Pose2d m_RobotPose;
 
     public Swerve() {
@@ -100,7 +98,6 @@ public class Swerve extends SubsystemBase{
         );
 
         // SmartDashboard
-        SmartDashboard.putBoolean("swerve_ffControlled", isffControl);
         SmartDashboard.putData(m_field);
 
         // #region AutoBuilder
@@ -192,8 +189,6 @@ public class Swerve extends SubsystemBase{
         SmartDashboard.putNumber("EFTREARSPEED", m_LeftRearModule.get());
         SmartDashboard.putNumber("RFSPEED", m_RightFrontModule.get());
         SmartDashboard.putNumber("RRSPEED", m_RightRearModule.get());*/
-
-        isffControl = SmartDashboard.getBoolean("swerve_ffControlled", isffControl);
         // #endregion
     }
 
@@ -262,14 +257,14 @@ public class Swerve extends SubsystemBase{
     //#endregion
 
     // #region ModuleState
-    //將前面返回的state最大速度限制到1再回傳回去給SwerveModuleState
-    public void setModulestate(SwerveModuleState[] desiredState, boolean isffControl) {
-        SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio);
+    //將前面返回的state最大速度限制再回傳回去給SwerveModuleState
+    public void setModulestate(SwerveModuleState[] desiredState) {
+        SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio * SwerveConstants.kMaxVelocityMetersPerSecond);
         
-        m_LeftFrontModule.setState(desiredState[0], isffControl);
-        m_RightFrontModule.setState(desiredState[1], isffControl);
-        m_LeftRearModule.setState(desiredState[2], isffControl);
-        m_RightRearModule.setState(desiredState[3], isffControl);
+        m_LeftFrontModule.setState(desiredState[0]);
+        m_RightFrontModule.setState(desiredState[1]);
+        m_LeftRearModule.setState(desiredState[2]);
+        m_RightRearModule.setState(desiredState[3]);
     }
 
     public SwerveModuleState[] getModuleStates() {
@@ -335,23 +330,27 @@ public class Swerve extends SubsystemBase{
      * @param zSpeed percent power for rotation (旋轉的功率百分比)
      * @param fieldOriented configure robot movement style (設置機器運動方式) (field or robot oriented)
      */
-    public void drive(double xSpeed, double ySpeed, double zSpeed, boolean fieldOriented, boolean isffControl) {
+    public void drive(double xSpeed, double ySpeed, double zSpeed, boolean fieldOriented) {
         SmartDashboard.putNumber("x_speed_set", xSpeed);
         SmartDashboard.putNumber("y_speed_set",  ySpeed);
+
+        xSpeed *= SwerveConstants.kMaxVelocityMetersPerSecond;
+        ySpeed *= SwerveConstants.kMaxVelocityMetersPerSecond;
+        zSpeed *= SwerveConstants.kMaxAngularVelocityRadPerSecond;
         
         if (fieldOriented) {
             SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
                 ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, zSpeed, Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble() - this.headingOffset)));
-            setModulestate(states, isffControl);
+            setModulestate(states);
         } else {
             SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
                 new ChassisSpeeds(xSpeed, ySpeed, zSpeed));
-            setModulestate(states, isffControl);
+            setModulestate(states);
         }
     }
 
     public void drive(double xSpeed, double ySpeed, double zSpeed) {
-        drive(xSpeed, ySpeed, zSpeed, fieldOriented, false);
+        drive(xSpeed, ySpeed, zSpeed, fieldOriented);
     }
 
     public void driveChassis(ChassisSpeeds speeds) {
@@ -367,11 +366,11 @@ public class Swerve extends SubsystemBase{
     }
 
     public void driveChassis(double xSpeed, double ySpeed, double zSpeed) { 
-        drive(xSpeed, ySpeed, zSpeed, false, true);
+        drive(xSpeed, ySpeed, zSpeed, false);
     }
 
     public void autoDriver(double xSpeed, double ySpeed, double zSpeed) {
-        drive(xSpeed, ySpeed, zSpeed, true, true);
+        drive(xSpeed, ySpeed, zSpeed, true);
     }
     // #endregion
 

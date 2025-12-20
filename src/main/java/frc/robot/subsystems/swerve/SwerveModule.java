@@ -1,55 +1,59 @@
 package frc.robot.subsystems.swerve;
 
 import com.ctre.phoenix6.configs.CANcoderConfiguration;
+import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.CANcoder;
-
-
+import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.InvertedValue;
+import com.ctre.phoenix6.signals.NeutralModeValue;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkBase.PersistMode;
 import com.revrobotics.spark.SparkBase.ResetMode;
-import com.revrobotics.spark.config.EncoderConfig;
 import com.revrobotics.spark.config.SparkMaxConfig;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
-import com.revrobotics.RelativeEncoder;
 
 import edu.wpi.first.math.controller.PIDController;
-import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
-import edu.wpi.first.units.measure.Voltage;
 import frc.robot.Constants.SwerveConstants;
 
 public class SwerveModule {
     private SparkMax m_rotorMotor;
-    private SparkMax m_throttle;
+    private TalonFX m_throttle;
 
-    private RelativeEncoder encoder;
+    private VelocityVoltage throttleRequest = new VelocityVoltage(0);
+
     private CANcoder RotorCancoder;
 
     private PIDController rotorPID;
 
-    private static final SimpleMotorFeedforward ff_throttleMotor = new SimpleMotorFeedforward(0, SwerveConstants.kThottleFF_kV, SwerveConstants.kThottleFF_kA);
-
     public SwerveModule(int ThrottleID, int RotorID, int intRotorEncoderID, double RotorEncoderOffsetAngleDeg) {
-        m_throttle = new SparkMax(ThrottleID, MotorType.kBrushless);
+        m_throttle = new TalonFX(ThrottleID);
 
         m_rotorMotor = new SparkMax(RotorID, MotorType.kBrushless);
 
         RotorCancoder = new CANcoder(intRotorEncoderID, "SwerveCancoder");
 
-        m_throttle.configure(
-            new SparkMaxConfig()
-                .inverted(SwerveConstants.kThrottleMotorInverted)
-                .idleMode(IdleMode.kBrake)
-                .apply(new EncoderConfig()
-                    .velocityConversionFactor(SwerveConstants.ThrottleVelocityConversionFactor)
-                    .positionConversionFactor(SwerveConstants.ThrottlePositionConversionFactor)
-                ),
-            ResetMode.kNoResetSafeParameters,
-            PersistMode.kNoPersistParameters
-        );
+        TalonFXConfiguration throttleCfg = new TalonFXConfiguration();
+        throttleCfg.MotorOutput.Inverted = SwerveConstants.kThrottleMotorInverted ? 
+            InvertedValue.Clockwise_Positive : 
+            InvertedValue.CounterClockwise_Positive;
+
+        throttleCfg.CurrentLimits.SupplyCurrentLimit = SwerveConstants.kCurrentLimit;
+        throttleCfg.CurrentLimits.SupplyCurrentLimitEnable = true;
+
+        throttleCfg.MotorOutput.NeutralMode = NeutralModeValue.Brake;
+
+        throttleCfg.Slot0.kP = SwerveConstants.kDrive_P;
+        throttleCfg.Slot0.kI = SwerveConstants.kDrive_I;
+        throttleCfg.Slot0.kD = SwerveConstants.kDrive_D;
+        throttleCfg.Slot0.kV = SwerveConstants.kDrive_kV;
+
+        m_throttle.getConfigurator().apply(throttleCfg);
+
         m_rotorMotor.configure(
             new SparkMaxConfig()
                 .inverted(SwerveConstants.kRotorMotorInverted)
@@ -57,8 +61,6 @@ public class SwerveModule {
             ResetMode.kNoResetSafeParameters,
             PersistMode.kNoPersistParameters
         );
-
-        encoder = m_throttle.getEncoder();
         
         //將上面設定的東西新增到Cancoder裡面
         RotorCancoder.getConfigurator().apply(
@@ -82,7 +84,8 @@ public class SwerveModule {
     //取得目前swerve模組得狀態(速度、旋轉角度)
     public SwerveModuleState getState() {
         //encoder.setVelocityConversionFactor(SwerveConstants.ThrottleVelocityConversionFactor);
-        double ThrottleVelocity = encoder.getVelocity();
+        double driveRPS = m_throttle.getVelocity().getValueAsDouble();
+        double ThrottleVelocity = driveRPS * SwerveConstants.kThrottleVelocityConversionFactor;
 
         return new SwerveModuleState(
             ThrottleVelocity,
@@ -92,7 +95,8 @@ public class SwerveModule {
     //取得目前swerve模組的狀態(位置、旋轉角度)
     public SwerveModulePosition getPosition() {
         //encoder.setPositionConversionFactor(SwerveConstants.ThrottlePositionConversionFactor);
-        double ThrottlePosition = -encoder.getPosition();
+        double ThrottlePosition = m_throttle.getPosition().getValueAsDouble() * SwerveConstants.kThrottlePositionConversionFactor;
+        // double ThrottlePosition = -encoder.getPosition();
 
         return new SwerveModulePosition(
             ThrottlePosition,
@@ -101,23 +105,16 @@ public class SwerveModule {
     }
     
     //設定Swerve模組如何運作
-    public void setState(SwerveModuleState state, boolean isffControl) {
+    public void setState(SwerveModuleState state) {
+        // 優化狀態，使轉向馬達不必旋轉超過 90 度來獲得目標的角度
         state.optimize(this.getState().angle);
 
         //比較目前角度與目標角度利用PID控制器計算出馬達需要輸出多少
         double rotorOutput = rotorPID.calculate(getState().angle.getDegrees(), state.angle.getDegrees());
-
-        if(isffControl) {  
-            m_throttle.setVoltage(ff_throttleMotor.calculateWithVelocities(this.getState().speedMetersPerSecond, state.speedMetersPerSecond));
-        } else {
-            m_throttle.set(state.speedMetersPerSecond);
-        }
         m_rotorMotor.set(rotorOutput);
-    
-    }
 
-    public void setVoltage(Voltage voltage) {
-        m_throttle.setVoltage(voltage);
+        double targetRPS = state.speedMetersPerSecond * SwerveConstants.kThrottleVelocityConversionFactor;
+        m_throttle.setControl(throttleRequest.withVelocity(targetRPS));
     }
 
     public void setRotorangle() {

@@ -59,6 +59,8 @@ public class Swerve extends SubsystemBase{
     
     private final Pigeon2 m_Pigeon = new Pigeon2(5, "SwerveCancoder");
 
+    private Field2d m_field = new Field2d();
+
     private double maxSpeedRatio = SwerveConstants.kDefaultSpeed;
     private double headingOffset = 0;
 
@@ -74,18 +76,12 @@ public class Swerve extends SubsystemBase{
 
     private Pose2d m_RobotPose;
 
-    private Field2d m_field = new Field2d();
-
     public Swerve() {
         // Allinace
         resetAllinace();
         System.out.println("My alliance" + m_alliance);
 
-        m_Pigeon.reset();       
-
-        // SmartDashboard
-        SmartDashboard.putBoolean("swerve_ffControlled", isffControl);
-        SmartDashboard.putData(m_field);
+        m_Pigeon.reset();
     
         // Odometry & PoseEstimator
         m_odometry = new SwerveDriveOdometry(
@@ -103,7 +99,11 @@ public class Swerve extends SubsystemBase{
         VecBuilder.fill(0.7, 0.7, 999999999)
         );
 
-        // AutoBuilder
+        // SmartDashboard
+        SmartDashboard.putBoolean("swerve_ffControlled", isffControl);
+        SmartDashboard.putData(m_field);
+
+        // #region AutoBuilder
         RobotConfig config;{
             try{
                 config = RobotConfig.fromGUISettings();
@@ -147,6 +147,7 @@ public class Swerve extends SubsystemBase{
             },
             this
         );
+        // #endregion
     }
     
     @Override
@@ -154,11 +155,21 @@ public class Swerve extends SubsystemBase{
         if(DriverStation.getAlliance().isPresent())
             m_alliance = DriverStation.getAlliance().get();
 
-        Rotation2d getRotation2d = getImuARotation2d();
         m_RobotPose = m_poseEstimator.getEstimatedPosition();
 
-        m_odometry.update(getRotation2d, getModulePositions());
-        
+        m_poseEstimator.update(
+            getImuARotation2d(),
+            getModulePositions());
+
+        m_odometry.update(
+            getImuARotation2d(),
+            getModulePositions());
+
+        this.updateVisionPose();
+
+        m_field.setRobotPose(m_poseEstimator.getEstimatedPosition());
+
+        // #region SmartDashboard
         SmartDashboard.putNumber("LF", this.getModuleStates()[0].angle.getDegrees());
         SmartDashboard.putNumber("RF", this.getModuleStates()[1].angle.getDegrees());
         SmartDashboard.putNumber("LR", this.getModuleStates()[2].angle.getDegrees());
@@ -183,18 +194,7 @@ public class Swerve extends SubsystemBase{
         SmartDashboard.putNumber("RRSPEED", m_RightRearModule.get());*/
 
         isffControl = SmartDashboard.getBoolean("swerve_ffControlled", isffControl);
-
-        m_poseEstimator.update(
-            getImuARotation2d(),
-            getModulePositions());
-
-        m_odometry.update(
-            getImuARotation2d(),
-            getModulePositions());
-
-        this.updateVisionPose();
-
-        m_field.setRobotPose(m_poseEstimator.getEstimatedPosition());
+        // #endregion
     }
 
     // #region IMU
@@ -259,13 +259,13 @@ public class Swerve extends SubsystemBase{
 
     // #region ModuleState
     //將前面返回的state最大速度限制到1再回傳回去給SwerveModuleState
-    public void setModulestate(SwerveModuleState[] desiredState) {
+    public void setModulestate(SwerveModuleState[] desiredState, boolean isffControl) {
         SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio);
         
-        m_LeftFrontModule.setState(desiredState[0]);
-        m_RightFrontModule.setState(desiredState[1]);
-        m_LeftRearModule.setState(desiredState[2]);
-        m_RightRearModule.setState(desiredState[3]);
+        m_LeftFrontModule.setState(desiredState[0], isffControl);
+        m_RightFrontModule.setState(desiredState[1], isffControl);
+        m_LeftRearModule.setState(desiredState[2], isffControl);
+        m_RightRearModule.setState(desiredState[3], isffControl);
     }
 
     public SwerveModuleState[] getModuleStates() {
@@ -327,34 +327,23 @@ public class Swerve extends SubsystemBase{
      * @param zSpeed percent power for rotation (旋轉的功率百分比)
      * @param fieldOriented configure robot movement style (設置機器運動方式) (field or robot oriented)
      */
-    public void drive(double xSpeed, double ySpeed, double zSpeed, boolean fieldOriented) {
+    public void drive(double xSpeed, double ySpeed, double zSpeed, boolean fieldOriented, boolean isffControl) {
         SmartDashboard.putNumber("x_speed_set", xSpeed);
         SmartDashboard.putNumber("y_speed_set",  ySpeed);
         
         if (fieldOriented) {
             SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
                 ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, zSpeed, Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble() - this.headingOffset)));
-            setModulestate(states);
+            setModulestate(states, isffControl);
         } else {
             SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
                 new ChassisSpeeds(xSpeed, ySpeed, zSpeed));
-            setModulestate(states);
+            setModulestate(states, isffControl);
         }
     }
 
     public void drive(double xSpeed, double ySpeed, double zSpeed) {
-        SmartDashboard.putNumber("x_speed_set", xSpeed);
-        SmartDashboard.putNumber("y_speed_set",  ySpeed);
-
-        if (fieldOriented) {
-            SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
-                ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, zSpeed, Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble() - this.headingOffset)));
-            setModulestate(states);
-        } else {
-            SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
-                new ChassisSpeeds(xSpeed, ySpeed, zSpeed));
-            setModulestate(states);
-        }
+        drive(xSpeed, ySpeed, zSpeed, fieldOriented, false);
     }
 
     public void driveChassis(ChassisSpeeds speeds) {
@@ -365,38 +354,16 @@ public class Swerve extends SubsystemBase{
                 -speeds.omegaRadiansPerSecond
             );
         } else {
-            driveChassis(
-                0,
-                0,
-                0
-            );
+            driveChassis(0,0,0);
         }
     }
 
     public void driveChassis(double xSpeed, double ySpeed, double zSpeed) { 
-        SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
-            new ChassisSpeeds(
-                xSpeed,
-                ySpeed,
-                zSpeed
-            )
-        );
-        setModulestate(states);
+        drive(xSpeed, ySpeed, zSpeed, false, true);
     }
 
     public void autoDriver(double xSpeed, double ySpeed, double zSpeed) {
-        SmartDashboard.putNumber("x_speed_set", xSpeed);
-        SmartDashboard.putNumber("y_speed_set",  ySpeed);
-
-        SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
-            ChassisSpeeds.fromFieldRelativeSpeeds(
-                xSpeed,
-                ySpeed,
-                zSpeed,
-                Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble())
-            )
-        );
-        setModulestate(states);
+        drive(xSpeed, ySpeed, zSpeed, true, true);
     }
     // #endregion
 

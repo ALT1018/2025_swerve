@@ -59,8 +59,6 @@ public class SwerveModule {
         );
 
         encoder = m_throttle.getEncoder();
-        //encoder = new SparkRelativeEncoderSim(Throttle);
-
         
         //將上面設定的東西新增到Cancoder裡面
         RotorCancoder.getConfigurator().apply(
@@ -76,7 +74,6 @@ public class SwerveModule {
             SwerveConstants.kRotor_I,
             SwerveConstants.kRotor_D
         );
-
 
         //啟用自動計算從當前值到目標值的最短路徑 180，-180視為同一個點不會嘗試轉一整圈
         rotorPID.enableContinuousInput(-180, 180);
@@ -104,13 +101,13 @@ public class SwerveModule {
     }
     
     //設定Swerve模組如何運作
-    public void setState(SwerveModuleState state) {
+    public void setState(SwerveModuleState state, boolean isffControl) {
         state.optimize(this.getState().angle);
 
         //比較目前角度與目標角度利用PID控制器計算出馬達需要輸出多少
         double rotorOutput = rotorPID.calculate(getState().angle.getDegrees(), state.angle.getDegrees());
 
-        if(Swerve.isffControl) {  
+        if(isffControl) {  
             m_throttle.setVoltage(ff_throttleMotor.calculateWithVelocities(this.getState().speedMetersPerSecond, state.speedMetersPerSecond));
         } else {
             m_throttle.set(state.speedMetersPerSecond);
@@ -131,5 +128,4 @@ public class SwerveModule {
     public double get() {
         return m_throttle.get();
     }
-
 }

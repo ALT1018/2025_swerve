@@ -258,13 +258,23 @@ public class Swerve extends SubsystemBase{
 
     // #region ModuleState
     //將前面返回的state最大速度限制再回傳回去給SwerveModuleState
-    public void setModulestate(SwerveModuleState[] desiredState) {
-        SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio * SwerveConstants.kMaxVelocityMetersPerSecond);
-        
-        m_LeftFrontModule.setState(desiredState[0]);
-        m_RightFrontModule.setState(desiredState[1]);
-        m_LeftRearModule.setState(desiredState[2]);
-        m_RightRearModule.setState(desiredState[3]);
+    public void setModulestate(SwerveModuleState[] desiredState, boolean isFOC) {
+        if (isFOC) {
+            SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, SwerveConstants.kMaxVelocityMetersPerSecond);
+
+            m_LeftFrontModule.setState(desiredState[0]);
+            m_RightFrontModule.setState(desiredState[1]);
+            m_LeftRearModule.setState(desiredState[2]);
+            m_RightRearModule.setState(desiredState[3]);
+        }
+        else {
+            SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio);
+
+            m_LeftFrontModule.setStateVoltage(desiredState[0]);
+            m_RightFrontModule.setStateVoltage(desiredState[1]);
+            m_LeftRearModule.setStateVoltage(desiredState[2]);
+            m_RightRearModule.setStateVoltage(desiredState[3]);
+        }
     }
 
     public SwerveModuleState[] getModuleStates() {
@@ -333,19 +343,15 @@ public class Swerve extends SubsystemBase{
     public void drive(double xSpeed, double ySpeed, double zSpeed, boolean fieldOriented) {
         SmartDashboard.putNumber("x_speed_set", xSpeed);
         SmartDashboard.putNumber("y_speed_set",  ySpeed);
-
-        xSpeed *= SwerveConstants.kMaxVelocityMetersPerSecond;
-        ySpeed *= SwerveConstants.kMaxVelocityMetersPerSecond;
-        zSpeed *= SwerveConstants.kMaxAngularVelocityRadPerSecond;
         
         if (fieldOriented) {
             SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
                 ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, zSpeed, Rotation2d.fromDegrees(m_Pigeon.getYaw().getValueAsDouble() - this.headingOffset)));
-            setModulestate(states);
+            setModulestate(states, false);
         } else {
             SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
                 new ChassisSpeeds(xSpeed, ySpeed, zSpeed));
-            setModulestate(states);
+            setModulestate(states, false);
         }
     }
 
@@ -354,19 +360,22 @@ public class Swerve extends SubsystemBase{
     }
 
     public void driveChassis(ChassisSpeeds speeds) {
-        if (speeds.vxMetersPerSecond != 0 || speeds.vyMetersPerSecond != 0) {
-            driveChassis(
-                -speeds.vxMetersPerSecond,
-                -speeds.vyMetersPerSecond,
-                -speeds.omegaRadiansPerSecond
-            );
-        } else {
-            driveChassis(0,0,0);
-        }
+        driveChassis(
+            -speeds.vxMetersPerSecond,
+            -speeds.vyMetersPerSecond,
+            -speeds.omegaRadiansPerSecond
+        );
     }
 
     public void driveChassis(double xSpeed, double ySpeed, double zSpeed) { 
-        drive(xSpeed, ySpeed, zSpeed, false);
+        SwerveModuleState[] states = SwerveConstants.kSwerveDriveKinematics.toSwerveModuleStates(
+            new ChassisSpeeds(
+                xSpeed,
+                ySpeed,
+                zSpeed
+            )
+        );
+        setModulestate(states, true);
     }
 
     public void autoDriver(double xSpeed, double ySpeed, double zSpeed) {

@@ -117,6 +117,17 @@ public class SwerveModule {
         m_throttle.setControl(throttleRequest.withVelocity(targetRPS));
     }
 
+    public void setStateVoltage(SwerveModuleState state) {
+        // 優化狀態，使轉向馬達不必旋轉超過 90 度來獲得目標的角度
+        state.optimize(this.getState().angle);
+
+        //比較目前角度與目標角度利用PID控制器計算出馬達需要輸出多少
+        double rotorOutput = rotorPID.calculate(getState().angle.getDegrees(), state.angle.getDegrees());
+        m_rotorMotor.set(rotorOutput);
+
+        m_throttle.set(state.speedMetersPerSecond);
+    }
+
     public void setRotorangle() {
         double rotorOutput = rotorPID.calculate(getState().angle.getDegrees(), 90);
         m_rotorMotor.set(rotorOutput);

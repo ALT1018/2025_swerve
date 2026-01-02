@@ -264,7 +264,11 @@ public class Swerve extends SubsystemBase{
     // #region ModuleState
     //將前面返回的state最大速度限制到1再回傳回去給SwerveModuleState
     public void setModulestate(SwerveModuleState[] desiredState, boolean isffControl) {
-        SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio);
+        if(isffControl) {
+            SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, SwerveConstants.kMaxVelocityMetersPerSecond);
+        } else {
+            SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, this.maxSpeedRatio);
+        }
         
         m_LeftFrontModule.setState(desiredState[0], isffControl);
         m_RightFrontModule.setState(desiredState[1], isffControl);
